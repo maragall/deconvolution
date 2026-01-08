@@ -1,0 +1,5 @@
+numpy
+cupy-cuda12x
+tifffile
+zarr
+scipy

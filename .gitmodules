@@ -1,0 +1,9 @@
+[submodule "vendor/PSFmodels"]
+	path = vendor/PSFmodels
+	url = https://github.com/tlambert03/PSFmodels.git
+[submodule "vendor/opm-processing-v2"]
+	path = vendor/opm-processing-v2
+	url = https://github.com/QI2lab/opm-processing-v2.git
+[submodule "vendor/DeconvTest"]
+	path = vendor/DeconvTest
+	url = https://github.com/applied-systems-biology/DeconvTest.git
