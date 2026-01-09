@@ -108,11 +108,20 @@ def main():
     # Print summary
     if verbose and results:
         print("\nSummary:")
+        # Filter results that have improvement data (exclude mismatch tests)
+        standard_results = [r for r in results if "improvement_db" in r]
+
         avg_psnr = sum(r["metrics"]["psnr"] for r in results) / len(results)
         avg_ssim = sum(r["metrics"]["ssim"] for r in results) / len(results)
         avg_time = sum(r["elapsed_time"] for r in results) / len(results)
+
         print(f"  Avg PSNR: {avg_psnr:.1f} dB")
         print(f"  Avg SSIM: {avg_ssim:.3f}")
+
+        if standard_results:
+            avg_improvement = sum(r["improvement_db"] for r in standard_results) / len(standard_results)
+            print(f"  Avg Improvement: {avg_improvement:+.1f} dB")
+
         print(f"  Avg Time: {avg_time:.2f}s")
 
 

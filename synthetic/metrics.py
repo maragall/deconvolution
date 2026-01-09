@@ -107,9 +107,30 @@ def unify_shape(image: np.ndarray, ground_truth: np.ndarray) -> tuple:
     return img1_padded, img2_padded
 
 
+def rescale_to_match(image: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """
+    Rescale image intensities to optimally match reference using least squares.
+
+    Finds optimal a, b such that: a * image + b ≈ reference
+    This is standard practice in deconvolution evaluation.
+    """
+    img_flat = image.flatten()
+    ref_flat = reference.flatten()
+
+    # Solve least squares: [img, 1] @ [a, b]^T = ref
+    A = np.column_stack([img_flat, np.ones_like(img_flat)])
+    result = np.linalg.lstsq(A, ref_flat, rcond=None)
+    a, b = result[0]
+
+    return a * image + b
+
+
 def evaluate(deconvolved: np.ndarray, ground_truth: np.ndarray) -> Dict[str, float]:
     """
     Compute all metrics comparing deconvolved image to ground truth.
+
+    Uses optimal intensity rescaling to ensure fair comparison
+    (deconvolution may change absolute intensity scale).
 
     Args:
         deconvolved: Deconvolved image array
@@ -122,9 +143,12 @@ def evaluate(deconvolved: np.ndarray, ground_truth: np.ndarray) -> Dict[str, flo
     if deconvolved.shape != ground_truth.shape:
         deconvolved, ground_truth = unify_shape(deconvolved, ground_truth)
 
-    # Normalize both to [0, 1]
-    dec_norm = normalize(deconvolved)
+    # Rescale deconvolved to optimally match ground truth intensity
+    dec_rescaled = rescale_to_match(deconvolved, ground_truth)
+
+    # Normalize both to [0, 1] for consistent metrics
     gt_norm = normalize(ground_truth)
+    dec_norm = normalize(dec_rescaled)
 
     return {
         "mse": compute_mse(dec_norm, gt_norm),

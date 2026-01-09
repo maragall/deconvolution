@@ -374,25 +374,32 @@ def run_benchmark(
         # Crop PSF to fit image if necessary
         psf_for_deconv = crop_psf_to_fit(data["psf"], data["synthetic_image"].shape)
 
+        # Evaluate blurred input (baseline)
+        blur_metrics = evaluate(data["synthetic_image"], data["ground_truth"])
+
         # Deconvolve
         start_time = time.time()
         deconvolved = deconvolver.deconvolve(data["synthetic_image"], psf_for_deconv)
         elapsed = time.time() - start_time
 
-        # Evaluate
+        # Evaluate deconvolved
         metrics = evaluate(deconvolved, data["ground_truth"])
+
+        # Compute improvement
+        improvement = metrics["psnr"] - blur_metrics["psnr"]
 
         if verbose:
             print(
-                f"PSNR={metrics['psnr']:.1f} dB  "
+                f"PSNR={metrics['psnr']:.1f} dB ({improvement:+.1f})  "
                 f"SSIM={metrics['ssim']:.2f}  "
-                f"Pearson={metrics['pearson']:.2f}  "
                 f"({elapsed:.1f}s)"
             )
 
         results.append({
             "name": name,
             "metrics": metrics,
+            "blur_metrics": blur_metrics,
+            "improvement_db": improvement,
             "elapsed_time": elapsed,
             "params": data["params"],
         })
