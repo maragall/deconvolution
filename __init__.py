@@ -1,38 +1,26 @@
 """
-Deconv Tool - Minimal Microscopy Deconvolution
+deconv_tool - 3D Microscopy Deconvolution
 
 Usage:
-    from deconv_tool import OpticalParams, deconvolve_tiff
+    # Low-level API
+    from deconv_tool import deconvolve, generate_psf
+    psf = generate_psf(nz=31, nxy=31, dxy=0.1, dz=0.3, wavelength=0.525, na=0.8)
+    result = deconvolve(image, psf)
 
-    params = OpticalParams(
-        na=0.4,
-        wavelength=0.488,  # microns
-        dxy=0.276,         # microns
-        dz=0.454,          # microns
-    )
-
-    deconvolve_tiff(
-        input_path="input.tif",
-        output_path="output.zarr",
-        params=params,
-        is_confocal=False,
-    )
+    # High-level API with Squid acquisition
+    from deconv_tool import open_acquisition
+    acq = open_acquisition("/path/to/squid/data")
+    for fov in acq.iter_fovs():
+        stack = acq.get_stack(fov, channel="488")
 """
-
-__version__ = "0.1.0"
-
-from .models import OpticalParams
-from .psf import generate_psf, generate_confocal_psf
-from .deconv import deconvolve, RLGCDeconvolver
-from .pipeline import run_deconvolution, deconvolve_tiff, save_zarr_pyramid
+from .deconv import deconvolve
+from .psf import generate_psf
+from .readers import open_acquisition, SquidAcquisition, SquidMetadata
 
 __all__ = [
-    "OpticalParams",
-    "generate_psf",
-    "generate_confocal_psf",
     "deconvolve",
-    "RLGCDeconvolver",
-    "run_deconvolution",
-    "deconvolve_tiff",
-    "save_zarr_pyramid",
+    "generate_psf",
+    "open_acquisition",
+    "SquidAcquisition",
+    "SquidMetadata",
 ]
