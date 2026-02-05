@@ -1,0 +1,12 @@
+name: deconwolf
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.10
+  - numpy
+  - tifffile
+  - scipy
+  - pyqt
+  - pip
+  - pip:
+    - psfmodels

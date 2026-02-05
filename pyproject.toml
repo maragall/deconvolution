@@ -1,57 +1,28 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "deconv_tool"
+name = "deconwolf"
 version = "0.1.0"
-description = "Portable microscopy deconvolution tool with auto-format detection"
+description = "Microscopy deconvolution powered by deconwolf"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [
-    {name = "Your Name", email = "your.email@example.com"},
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Image Processing",
-]
 dependencies = [
-    "numpy>=1.20",
-    "tifffile>=2021.0",
-    "psfmodels>=0.3",
+    "numpy",
+    "tifffile",
+    "scipy",
+    "psfmodels",
 ]
 
 [project.optional-dependencies]
-gpu = [
-    "cupy-cuda12x>=12.0",  # Adjust for your CUDA version
-]
-dev = [
-    "pytest>=7.0",
-    "black>=23.0",
-    "ruff>=0.1",
-]
+gui = ["pyqt5"]
+dev = ["pytest"]
 
 [project.scripts]
-deconv = "deconv_tool.cli:main"
+deconwolf = "deconwolf.cli:main"
+deconwolf-gui = "deconwolf.gui.main:main"
 
-[project.urls]
-Homepage = "https://github.com/yourusername/deconv_tool"
-Issues = "https://github.com/yourusername/deconv_tool/issues"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["deconv_tool*"]
-
-[tool.black]
-line-length = 100
-
-[tool.ruff]
-line-length = 100
-select = ["E", "F", "I", "W"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/deconwolf"]

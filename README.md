@@ -1,92 +1,91 @@
-# deconv_tool
+# Deconwolf Python Wrapper
 
-Minimal microscopy deconvolution tool.
+A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf), a 3D deconvolution tool for fluorescence microscopy.
+
+> **Attribution**: This project is a wrapper around **deconwolf**, developed by Erik Wernersson et al. The core deconvolution algorithms are entirely from the original deconwolf project. See [Wernersson et al., Nature Methods 2024](https://www.nature.com/articles/s41592-024-02294-7).
 
 ## Installation
 
 ```bash
-git clone --recursive https://github.com/maragall/deconvolution.git
+# Clone the repository
+git clone https://github.com/maragall/deconvolution
 cd deconvolution
-pip install -r requirements.txt
+
+# Create conda environment
+conda env create -f environment.yml
+conda activate deconwolf
+
+# Note: You need the deconwolf binary (dw) installed
+# See https://github.com/elgw/deconwolf for installation instructions
 ```
-
-## Requirements
-
-- Python 3.10+
-- CUDA-capable GPU
-- Dependencies: `zarr`, `tifffile`, `numpy`, `cupy`
 
 ## Usage
 
-```python
-from deconv_tool import OpticalParams, deconvolve_tiff
+### GUI
 
-# All parameters must be explicitly provided (no hidden defaults)
-params = OpticalParams(
-    na=0.4,           # Numerical aperture
-    wavelength=0.488, # Emission wavelength in microns
-    dxy=0.276,        # Pixel size in microns
-    dz=0.454,         # Z step in microns
-    ni=1.0,           # Immersion refractive index (1.0=air, 1.515=oil)
+```bash
+deconwolf-gui
+```
+
+1. Browse to your acquisition folder
+2. Select channel to process
+3. Click "Run Deconvolution"
+
+### Command Line
+
+```bash
+# Process all FOVs for channel 488
+deconwolf /path/to/acquisition --channel 488
+
+# With custom parameters
+deconwolf /path/to/acquisition --channel 488 --relerror 0.01 --maxiter 100
+
+# GPU acceleration (requires OpenCL)
+deconwolf /path/to/acquisition --channel 488 --method shbcl2
+```
+
+### Python API
+
+```python
+from deconwolf import deconvolve, generate_psf, open_acquisition
+
+# Open acquisition
+acq = open_acquisition("/path/to/data")
+meta = acq.metadata
+
+# Generate PSF from metadata
+psf = generate_psf(
+    nz=31, nxy=31,
+    dxy=meta.dxy, dz=meta.dz,
+    wavelength=0.525, na=meta.na
 )
 
-# Deconvolve and save as zarr pyramid
-deconvolve_tiff(
-    input_path="input.tif",
-    output_path="output.zarr",
-    params=params,
-    is_confocal=False,  # True for confocal microscopy
-)
+# Deconvolve each FOV
+for fov in acq.iter_fovs():
+    stack = acq.get_stack(fov, channel="488")
+    result = deconvolve(stack, psf)
 ```
 
-## Architecture
+## Supported Acquisition Formats
 
-```
-deconv_tool/
-├── models.py      # OpticalParams dataclass
-├── psf/           # PSF generation (wrapper around psfmodels)
-├── deconv/        # Deconvolution (wrapper around RLGC)
-├── pipeline.py    # High-level functions (load, deconvolve, save)
-├── formats/       # Format readers
-└── vendor/        # Bundled dependencies (PSFmodels, opm-processing-v2)
-```
+- **OME-TIFF**: `ome_tiff/*.ome.tiff`
+- **Individual TIFF**: `*_Fluorescence_*_nm_Ex.tiff`
 
-### Design Principles
+## Deconvolution Parameters
 
-1. **No hidden defaults** - All optical parameters must be explicitly provided
-2. **Thin wrappers** - PSF and RLGC code are not modified, only wrapped
-3. **Open/closed** - New formats can be added without modifying existing code
+All parameters are passed directly to deconwolf. See the [deconwolf documentation](https://elgw.github.io/deconwolf/) for details.
 
-## API
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| relerror | 0.001 | Convergence threshold (adaptive stopping) |
+| maxiter | 200 | Maximum iterations |
+| method | shb | Algorithm: `shb` (CPU), `rl` (Richardson-Lucy), `shbcl2` (GPU/OpenCL) |
 
-### Low-level
+## Credits
 
-```python
-from deconv_tool import generate_psf, generate_confocal_psf, RLGCDeconvolver
-
-# Generate PSF
-psf = generate_psf(nz=50, nx=101, dxy=0.276, dz=0.454, wavelength=0.488, na=0.4)
-
-# Or confocal PSF (widefield squared)
-psf = generate_confocal_psf(nz=50, nx=101, dxy=0.276, dz=0.454, wavelength=0.488, na=0.4)
-
-# Deconvolve
-deconvolver = RLGCDeconvolver(gpu_id=0)
-result = deconvolver.deconvolve(image, psf)
-```
-
-### High-level
-
-```python
-from deconv_tool import run_deconvolution, save_zarr_pyramid
-
-# Run deconvolution
-result, psf = run_deconvolution(image, params, is_confocal=False)
-
-# Save as zarr pyramid
-save_zarr_pyramid(result, "output.zarr")
-```
+- **Deconwolf**: Erik Wernersson and contributors - https://github.com/elgw/deconwolf
+- **Citation**: Wernersson et al., "Deconwolf—a GPU-accelerated deconvolution tool for microscopy", Nature Methods 2024
 
 ## License
 
-MIT License
+This wrapper is MIT licensed. The deconwolf binary has its own license (GPL v3) - see the [deconwolf repository](https://github.com/elgw/deconwolf).

@@ -1,0 +1,8 @@
+# Placeholder for pre-built deconwolf binaries
+#
+# Place binaries here:
+#   bin/linux-x86_64/dw
+#   bin/windows-x86_64/dw.exe
+#   bin/macos-x86_64/dw
+#
+# Or install deconwolf system-wide: https://github.com/elgw/deconwolf
