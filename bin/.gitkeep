@@ -1,8 +1,7 @@
-# Placeholder for pre-built deconwolf binaries
+# Bundled deconwolf binaries (pre-built, works out of the box)
 #
-# Place binaries here:
-#   bin/linux-x86_64/dw
-#   bin/windows-x86_64/dw.exe
-#   bin/macos-x86_64/dw
+#   bin/linux-x86_64/dw        + lib/*.so
+#   bin/windows-x86_64/dw.exe  + *.dll
 #
-# Or install deconwolf system-wide: https://github.com/elgw/deconwolf
+# Binaries are patched to find bundled libraries via rpath ($ORIGIN/lib).
+# Fallback: _get_library_env() in core.py sets LD_LIBRARY_PATH / PATH.

@@ -48,8 +48,6 @@ def find_binary(custom_path: str | None = None) -> str:
         bundled = pkg_root / "bin" / "linux-x86_64" / "dw"
     elif system == "windows":
         bundled = pkg_root / "bin" / "windows-x86_64" / "dw.exe"
-    elif system == "darwin":
-        bundled = pkg_root / "bin" / "macos-x86_64" / "dw"
     else:
         bundled = None
 

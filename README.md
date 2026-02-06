@@ -6,75 +6,51 @@ A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf),
 
 ## Installation
 
-### Step 1: Clone and set up the Python environment
+The deconwolf binary is **bundled** — no manual binary setup required.
+
+### Linux
 
 ```bash
 git clone git@github.com:maragall/deconvolution.git
 cd deconvolution
 
+# Install system libraries (FFTW3 and libpng are not bundled)
+sudo apt-get install -y libfftw3-single3 libpng16-16
+
+# Create Python environment
 conda env create -f environment.yml
 conda activate deconwolf
 ```
 
-### Step 2: Get the deconwolf binary
+### Windows
 
-This wrapper needs the `dw` binary from [deconwolf](https://github.com/elgw/deconwolf). Choose one of the options below.
+```powershell
+git clone git@github.com:maragall/deconvolution.git
+cd deconvolution
 
-#### Option A: Use the bundled binary (Linux x86_64, simplest)
-
-A pre-built `dw` binary is included at `bin/linux-x86_64/dw` with its custom libraries. You just need the system dependencies it links against:
-
-```bash
-sudo apt-get install -y libfftw3-single3 libpng16-16
+# Create Python environment
+conda env create -f environment.yml
+conda activate deconwolf
 ```
 
-Verify it works:
+All required DLLs are bundled in `bin\windows-x86_64\`.
+
+### Verify
 
 ```bash
-./bin/linux-x86_64/dw --help
+python -c "from deconwolf.binary import find_binary; print(find_binary())"
 ```
 
-#### Option B: Build from source (any Linux distro, latest version)
+This should print the path to the bundled `dw` binary.
 
-```bash
-# 1. Install build dependencies (Ubuntu/Debian)
-sudo apt-get install -y cmake pkg-config gcc git \
-  libfftw3-dev libfftw3-single3 libgsl-dev libomp-dev libpng-dev libtiff-dev
+### Advanced: using your own deconwolf build
 
-# 2. Clone and build deconwolf
-git clone https://github.com/elgw/deconwolf.git /tmp/deconwolf
-cd /tmp/deconwolf
-mkdir builddir && cd builddir
-cmake -DENABLE_GPU=OFF ..
-cmake --build .
+If you want to use a custom build instead of the bundled binary, the wrapper searches for `dw` in this order:
 
-# 3. Either install system-wide:
-sudo cmake --install . --prefix /usr
+1. Bundled binary at `bin/<platform>/dw`
+2. System `PATH`
 
-# Or copy into this project's bin/ directory:
-mkdir -p /path/to/deconvolution/bin/linux-x86_64
-cp dw /path/to/deconvolution/bin/linux-x86_64/
-```
-
-Add `-DENABLE_GPU=ON` in the cmake step if you have OpenCL and want GPU acceleration.
-
-#### Option C: Point to an existing installation
-
-If you already have `dw` installed elsewhere, either:
-
-- Add it to your `PATH`, or
-- Set the `DW_PATH` environment variable:
-  ```bash
-  export DW_PATH=/path/to/dw
-  ```
-
-### How binary discovery works
-
-The wrapper searches for `dw` in this order:
-
-1. `DW_PATH` environment variable
-2. Bundled binary at `bin/<platform>/dw`
-3. System `PATH`
+To override, set the `DW_PATH` environment variable to point to your binary. To build deconwolf from source, see the [deconwolf repository](https://github.com/elgw/deconwolf).
 
 ## Usage
 
