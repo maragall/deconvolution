@@ -1,12 +1,8 @@
 # Deconwolf Python Wrapper
 
-A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf), a 3D deconvolution tool for fluorescence microscopy.
-
-> **Attribution**: This project is a wrapper around **deconwolf**, developed by Erik Wernersson et al. The core deconvolution algorithms are entirely from the original deconwolf project. See [Wernersson et al., Nature Methods 2024](https://www.nature.com/articles/s41592-024-02294-7).
+A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf)
 
 ## Installation
-
-The deconwolf binary is **bundled** — no manual binary setup required.
 
 ### Linux
 
@@ -42,15 +38,6 @@ python -c "from deconwolf.binary import find_binary; print(find_binary())"
 ```
 
 This should print the path to the bundled `dw` binary.
-
-### Advanced: using your own deconwolf build
-
-If you want to use a custom build instead of the bundled binary, the wrapper searches for `dw` in this order:
-
-1. Bundled binary at `bin/<platform>/dw`
-2. System `PATH`
-
-To override, set the `DW_PATH` environment variable to point to your binary. To build deconwolf from source, see the [deconwolf repository](https://github.com/elgw/deconwolf).
 
 ## Usage
 
