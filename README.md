@@ -6,18 +6,75 @@ A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf),
 
 ## Installation
 
+### Step 1: Clone and set up the Python environment
+
 ```bash
-# Clone the repository
-git clone https://github.com/maragall/deconvolution
+git clone git@github.com:maragall/deconvolution.git
 cd deconvolution
 
-# Create conda environment
 conda env create -f environment.yml
 conda activate deconwolf
-
-# Note: You need the deconwolf binary (dw) installed
-# See https://github.com/elgw/deconwolf for installation instructions
 ```
+
+### Step 2: Get the deconwolf binary
+
+This wrapper needs the `dw` binary from [deconwolf](https://github.com/elgw/deconwolf). Choose one of the options below.
+
+#### Option A: Use the bundled binary (Linux x86_64, simplest)
+
+A pre-built `dw` binary is included at `bin/linux-x86_64/dw` with its custom libraries. You just need the system dependencies it links against:
+
+```bash
+sudo apt-get install -y libfftw3-single3 libpng16-16
+```
+
+Verify it works:
+
+```bash
+./bin/linux-x86_64/dw --help
+```
+
+#### Option B: Build from source (any Linux distro, latest version)
+
+```bash
+# 1. Install build dependencies (Ubuntu/Debian)
+sudo apt-get install -y cmake pkg-config gcc git \
+  libfftw3-dev libfftw3-single3 libgsl-dev libomp-dev libpng-dev libtiff-dev
+
+# 2. Clone and build deconwolf
+git clone https://github.com/elgw/deconwolf.git /tmp/deconwolf
+cd /tmp/deconwolf
+mkdir builddir && cd builddir
+cmake -DENABLE_GPU=OFF ..
+cmake --build .
+
+# 3. Either install system-wide:
+sudo cmake --install . --prefix /usr
+
+# Or copy into this project's bin/ directory:
+mkdir -p /path/to/deconvolution/bin/linux-x86_64
+cp dw /path/to/deconvolution/bin/linux-x86_64/
+```
+
+Add `-DENABLE_GPU=ON` in the cmake step if you have OpenCL and want GPU acceleration.
+
+#### Option C: Point to an existing installation
+
+If you already have `dw` installed elsewhere, either:
+
+- Add it to your `PATH`, or
+- Set the `DW_PATH` environment variable:
+  ```bash
+  export DW_PATH=/path/to/dw
+  ```
+
+### How binary discovery works
+
+The wrapper searches for `dw` in this order:
+
+1. `DW_PATH` environment variable
+2. Bundled binary at `bin/<platform>/dw`
+3. System `PATH`
 
 ## Usage
 
