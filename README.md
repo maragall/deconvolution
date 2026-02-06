@@ -38,7 +38,7 @@ deconwolf-gui
 deconwolf /path/to/acquisition --channel 488
 
 # With custom parameters
-deconwolf /path/to/acquisition --channel 488 --relerror 0.01 --maxiter 100
+deconwolf /path/to/acquisition --channel 488 --relerror 0.02 --maxiter 100
 
 # GPU acceleration (requires OpenCL)
 deconwolf /path/to/acquisition --channel 488 --method shbcl2
@@ -48,14 +48,21 @@ deconwolf /path/to/acquisition --channel 488 --method shbcl2
 
 ```python
 from deconwolf import deconvolve, generate_psf, open_acquisition
+from deconwolf.psf import compute_psf_size
 
 # Open acquisition
 acq = open_acquisition("/path/to/data")
 meta = acq.metadata
 
-# Generate PSF from metadata
+# Compute PSF dimensions from optical parameters
+nz_psf, nxy_psf = compute_psf_size(
+    meta.nz, meta.dxy, meta.dz,
+    wavelength=0.525, na=meta.na, ni=1.0
+)
+
+# Generate PSF
 psf = generate_psf(
-    nz=31, nxy=31,
+    nz=nz_psf, nxy=nxy_psf,
     dxy=meta.dxy, dz=meta.dz,
     wavelength=0.525, na=meta.na
 )
@@ -77,7 +84,7 @@ All parameters are passed directly to deconwolf. See the [deconwolf documentatio
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| relerror | 0.001 | Convergence threshold (adaptive stopping) |
+| relerror | 0.02 | Convergence threshold (adaptive stopping) |
 | maxiter | 200 | Maximum iterations |
 | method | shb | Algorithm: `shb` (CPU), `rl` (Richardson-Lucy), `shbcl2` (GPU/OpenCL) |
 
