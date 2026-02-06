@@ -1,4 +1,6 @@
 """Core deconvolution function."""
+import os
+import platform
 import subprocess
 import tempfile
 from pathlib import Path
@@ -7,6 +9,66 @@ import numpy as np
 import tifffile
 
 from .binary import find_binary
+
+
+def _get_library_env(dw_path: str) -> dict:
+    """Build environment with library paths for subprocess.
+
+    Handles platform-specific library path variables:
+    - Linux: LD_LIBRARY_PATH
+    - Windows: PATH
+    """
+    import sys
+    env = os.environ.copy()
+    system = platform.system().lower()
+
+    # Common library locations (priority order)
+    lib_paths = [
+        Path(dw_path).parent / "lib",      # Next to binary (bundled)
+        Path(dw_path).parent,               # Same dir as binary
+        Path.home() / ".local" / "lib",     # User local (Linux)
+    ]
+
+    # Add conda environment lib path if running in conda
+    conda_prefix = Path(sys.prefix)
+    conda_lib = conda_prefix / "lib"
+    if conda_lib.exists():
+        lib_paths.append(conda_lib)
+
+    # Find conda root (navigate up from envs/name or use directly)
+    if "envs" in conda_prefix.parts:
+        conda_root = conda_prefix.parent.parent
+    else:
+        conda_root = conda_prefix
+
+    pkgs_dir = conda_root / "pkgs"
+    if pkgs_dir.exists():
+        # Find jpeg-9* package for libjpeg.so.9
+        for pkg in pkgs_dir.glob("jpeg-9*/lib"):
+            if pkg.exists():
+                lib_paths.append(pkg)
+                break
+
+    if system == "linux":
+        lib_paths.append(Path("/usr/local/lib"))
+        key = "LD_LIBRARY_PATH"
+        separator = ":"
+    elif system == "windows":
+        key = "PATH"
+        separator = ";"
+    else:
+        return env
+
+    # Filter to existing directories
+    existing_paths = [str(p) for p in lib_paths if p.exists()]
+
+    if not existing_paths:
+        return env
+
+    current = env.get(key, "")
+    env[key] = separator.join(existing_paths + ([current] if current else []))
+
+    return env
 
 
 class DeconwolfError(RuntimeError):
@@ -20,7 +82,7 @@ class DeconwolfError(RuntimeError):
 def deconvolve(
     image: np.ndarray,
     psf: np.ndarray,
-    relerror: float = 0.001,
+    relerror: float = 0.02,
     maxiter: int = 200,
     iterations: int | None = None,
     method: str = "shb",
@@ -37,7 +99,7 @@ def deconvolve(
     Args:
         image: 3D array (Z, Y, X)
         psf: 3D PSF array, should be normalized (sum to 1)
-        relerror: Convergence threshold (default 0.001). Stop when relative
+        relerror: Convergence threshold (default 0.02). Stop when relative
                   change between iterations falls below this value.
         maxiter: Maximum iterations for adaptive stopping (default 200)
         iterations: If set, use fixed iteration count instead of adaptive
@@ -54,7 +116,7 @@ def deconvolve(
         DeconwolfError: Deconwolf execution failed
 
     Example:
-        >>> result = deconvolve(image, psf, relerror=0.001, maxiter=100)
+        >>> result = deconvolve(image, psf, relerror=0.02, maxiter=100)
     """
     # Validate inputs
     if image.ndim != 3:
@@ -102,8 +164,9 @@ def deconvolve(
         if verbose:
             print(f"Running: {' '.join(cmd)}")
 
-        # Execute
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Execute with library paths set for the subprocess
+        env = _get_library_env(dw)
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
         if verbose:
             if result.stdout:

@@ -1,4 +1,6 @@
 """PSF generation for microscopy deconvolution."""
+import math
+
 import numpy as np
 
 try:
@@ -6,6 +8,43 @@ try:
     HAS_PSFMODELS = True
 except ImportError:
     HAS_PSFMODELS = False
+
+
+def compute_psf_size(nz_acquisition, dxy, dz, wavelength, na, ni=1.0):
+    """Compute PSF dimensions from optical parameters.
+
+    Lateral: 6 Airy radii each side (~97% encircled energy).
+    Axial: max of deconwolf heuristic (2*Nz-1) and optics-based extent
+           (6x axial FWHM each side from focus).
+
+    Args:
+        nz_acquisition: Number of z-planes in the acquired stack
+        dxy: Pixel size in µm
+        dz: Z-step size in µm
+        wavelength: Emission wavelength in µm
+        na: Numerical aperture
+        ni: Immersion medium refractive index (default 1.0 for air)
+
+    Returns:
+        (nz_psf, nxy_psf) — both odd integers
+    """
+    # Lateral: Rayleigh criterion, 6x Airy radius each side
+    r_airy_px = 0.61 * wavelength / na / dxy
+    nxy = 2 * math.ceil(6 * r_airy_px) + 1
+
+    # Axial: optics-based with signal-processing heuristic as floor
+    axial_fwhm_um = 2 * ni * wavelength / (na ** 2)
+    nz_optical = 2 * math.ceil(6 * axial_fwhm_um / dz) + 1
+    nz_signal = 2 * nz_acquisition - 1
+    nz = max(nz_optical, nz_signal)
+
+    # Ensure odd
+    if nz % 2 == 0:
+        nz += 1
+    if nxy % 2 == 0:
+        nxy += 1
+
+    return nz, nxy
 
 
 def generate_psf(

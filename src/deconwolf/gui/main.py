@@ -1,4 +1,5 @@
 """Deconwolf GUI - Simple PyQt interface for microscopy deconvolution."""
+import math
 import sys
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from ..readers import open_acquisition
-from ..psf import generate_psf, wavelength_from_channel
+from ..psf import compute_psf_size, generate_psf, wavelength_from_channel
 from ..core import deconvolve
 
 
@@ -35,10 +36,24 @@ class DeconvolutionWorker(QThread):
             meta = self.acq.metadata
             wavelength = wavelength_from_channel(f"Fluorescence {self.channel} nm Ex")
 
+            # Auto-detect immersion medium based on NA
+            # NA cannot exceed refractive index of immersion medium
+            if meta.na <= 1.0:
+                ni = 1.0    # air
+            elif meta.na <= 1.33:
+                ni = 1.33   # water
+            else:
+                ni = 1.515  # oil
+
+            nz_psf, nxy_psf = compute_psf_size(
+                meta.nz, meta.dxy, meta.dz, wavelength, meta.na, ni,
+            )
+
             psf = generate_psf(
-                nz=31, nxy=31,
+                nz=nz_psf, nxy=nxy_psf,
                 dxy=meta.dxy, dz=meta.dz,
                 wavelength=wavelength, na=meta.na,
+                ni=ni,
             )
 
             # Process each FOV
@@ -130,10 +145,10 @@ class MainWindow(QMainWindow):
         rel_row = QHBoxLayout()
         rel_row.addWidget(QLabel("Relerror:"))
         self.relerror_spin = QDoubleSpinBox()
-        self.relerror_spin.setRange(0.0001, 0.1)
-        self.relerror_spin.setValue(0.001)
-        self.relerror_spin.setDecimals(4)
-        self.relerror_spin.setSingleStep(0.001)
+        self.relerror_spin.setDecimals(3)
+        self.relerror_spin.setRange(0.001, 0.5)
+        self.relerror_spin.setSingleStep(0.01)
+        self.relerror_spin.setValue(0.02)
         rel_row.addWidget(self.relerror_spin)
         adv_layout.addLayout(rel_row)
 
