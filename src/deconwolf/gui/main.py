@@ -1,23 +1,23 @@
 """Deconwolf GUI - Simple PyQt interface for microscopy deconvolution."""
-import math
 import sys
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QComboBox, QProgressBar,
-    QGroupBox, QSpinBox, QDoubleSpinBox, QTextEdit, QCheckBox,
+    QGroupBox, QSpinBox, QTextEdit, QCheckBox,
 )
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from ..readers import open_acquisition
 from ..psf import compute_psf_size, generate_psf, wavelength_from_channel
 from ..core import deconvolve
+from ..engine import gpu_info
 
 
 class DeconvolutionWorker(QThread):
     """Background worker for batch deconvolution."""
-    progress = pyqtSignal(int, int, str)  # current, total, message
+    progress = pyqtSignal(int, int, str)
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -32,18 +32,15 @@ class DeconvolutionWorker(QThread):
         try:
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Generate PSF
             meta = self.acq.metadata
             wavelength = wavelength_from_channel(f"Fluorescence {self.channel} nm Ex")
 
-            # Auto-detect immersion medium based on NA
-            # NA cannot exceed refractive index of immersion medium
             if meta.na <= 1.0:
-                ni = 1.0    # air
+                ni = 1.0
             elif meta.na <= 1.33:
-                ni = 1.33   # water
+                ni = 1.33
             else:
-                ni = 1.515  # oil
+                ni = 1.515
 
             nz_psf, nxy_psf = compute_psf_size(
                 meta.nz, meta.dxy, meta.dz, wavelength, meta.na, ni,
@@ -56,7 +53,6 @@ class DeconvolutionWorker(QThread):
                 ni=ni,
             )
 
-            # Process each FOV
             fovs = list(self.acq.iter_fovs())
             for i, fov in enumerate(fovs):
                 self.progress.emit(i + 1, len(fovs), f"Processing {fov}")
@@ -64,7 +60,6 @@ class DeconvolutionWorker(QThread):
                 stack = self.acq.get_stack(fov, self.channel)
                 result = deconvolve(stack, psf, **self.params)
 
-                # Save result
                 import tifffile
                 out_path = self.output_dir / f"{fov}_deconv.tiff"
                 tifffile.imwrite(out_path, result, imagej=True)
@@ -92,6 +87,11 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+
+        # GPU status
+        self.gpu_label = QLabel(gpu_info())
+        self.gpu_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(self.gpu_label)
 
         # Acquisition selection
         acq_group = QGroupBox("Acquisition")
@@ -132,44 +132,30 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(channel_group)
 
-        # Advanced settings (collapsible)
-        self.advanced_check = QCheckBox("Advanced Settings")
-        self.advanced_check.toggled.connect(self._toggle_advanced)
-        layout.addWidget(self.advanced_check)
+        # Method and parameters
+        params_group = QGroupBox("Parameters")
+        params_layout = QVBoxLayout(params_group)
 
-        self.advanced_group = QGroupBox()
-        self.advanced_group.setVisible(False)
-        adv_layout = QVBoxLayout(self.advanced_group)
-
-        # Relerror
-        rel_row = QHBoxLayout()
-        rel_row.addWidget(QLabel("Relerror:"))
-        self.relerror_spin = QDoubleSpinBox()
-        self.relerror_spin.setDecimals(3)
-        self.relerror_spin.setRange(0.001, 0.5)
-        self.relerror_spin.setSingleStep(0.01)
-        self.relerror_spin.setValue(0.02)
-        rel_row.addWidget(self.relerror_spin)
-        adv_layout.addLayout(rel_row)
-
-        # Maxiter
-        max_row = QHBoxLayout()
-        max_row.addWidget(QLabel("Max iterations:"))
-        self.maxiter_spin = QSpinBox()
-        self.maxiter_spin.setRange(10, 500)
-        self.maxiter_spin.setValue(200)
-        max_row.addWidget(self.maxiter_spin)
-        adv_layout.addLayout(max_row)
-
-        # Method
         method_row = QHBoxLayout()
         method_row.addWidget(QLabel("Method:"))
         self.method_combo = QComboBox()
-        self.method_combo.addItems(["shb", "rl", "shbcl2 (GPU)"])
+        self.method_combo.addItems(["omw (high throughput)", "rl (max resolution)"])
+        self.method_combo.currentTextChanged.connect(self._on_method_changed)
         method_row.addWidget(self.method_combo)
-        adv_layout.addLayout(method_row)
+        params_layout.addLayout(method_row)
 
-        layout.addWidget(self.advanced_group)
+        iter_row = QHBoxLayout()
+        iter_row.addWidget(QLabel("Iterations:"))
+        self.iter_spin = QSpinBox()
+        self.iter_spin.setRange(1, 100)
+        self.iter_spin.setValue(2)
+        iter_row.addWidget(self.iter_spin)
+        params_layout.addLayout(iter_row)
+
+        self.nogpu_check = QCheckBox("Force CPU (disable GPU)")
+        params_layout.addWidget(self.nogpu_check)
+
+        layout.addWidget(params_group)
 
         # Run button
         self.run_btn = QPushButton("Run Deconvolution")
@@ -187,8 +173,11 @@ class MainWindow(QMainWindow):
 
         layout.addStretch()
 
-    def _toggle_advanced(self, checked):
-        self.advanced_group.setVisible(checked)
+    def _on_method_changed(self, method):
+        if "omw" in method.lower():
+            self.iter_spin.setValue(2)
+        else:
+            self.iter_spin.setValue(15)
 
     def _browse_acquisition(self):
         path = QFileDialog.getExistingDirectory(
@@ -205,7 +194,7 @@ class MainWindow(QMainWindow):
             meta = self.acq.metadata
             self.info_label.setText(
                 f"Format: {self.acq.format_name} | "
-                f"NA={meta.na}, dxy={meta.dxy:.3f}µm, dz={meta.dz:.1f}µm"
+                f"NA={meta.na}, dxy={meta.dxy:.3f}um, dz={meta.dz:.1f}um"
             )
 
             self.channel_combo.clear()
@@ -230,14 +219,12 @@ class MainWindow(QMainWindow):
         channel = self.channel_combo.currentText()
         output_dir = self.output_label.text()
 
-        method = self.method_combo.currentText()
-        if "GPU" in method:
-            method = "shbcl2"
+        method = "omw" if "omw" in self.method_combo.currentText().lower() else "rl"
 
         params = {
-            "relerror": self.relerror_spin.value(),
-            "maxiter": self.maxiter_spin.value(),
             "method": method,
+            "iterations": self.iter_spin.value(),
+            "gpu": not self.nogpu_check.isChecked(),
         }
 
         self.worker = DeconvolutionWorker(self.acq, channel, output_dir, params)

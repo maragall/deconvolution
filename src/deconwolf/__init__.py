@@ -1,6 +1,7 @@
 """Deconwolf - Microscopy deconvolution.
 
-Simple API for 3D fluorescence microscopy deconvolution using deconwolf.
+Microscopy deconvolution with PetaKit5D algorithms (RL, OMW).
+GPU-first via CuPy, CPU fallback via NumPy/SciPy.
 
 Example:
     >>> from deconwolf import deconvolve, generate_psf, compute_psf_size, open_acquisition
@@ -40,4 +41,4 @@ __all__ = [
     "FOV",
     "AcquisitionReader",
 ]
-__version__ = "0.1.0"
+__version__ = "0.0.0"

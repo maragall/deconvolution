@@ -1,7 +1,7 @@
 [project]
 name = "deconwolf"
-version = "0.1.0"
-description = "Microscopy deconvolution powered by deconwolf"
+version = "0.0.0"
+description = "Microscopy deconvolution with PetaKit5D algorithms"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,6 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = ["cupy-cuda12x"]
 gui = ["pyqt5"]
 dev = ["pytest"]
 
