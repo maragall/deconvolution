@@ -66,8 +66,10 @@ def gpu_info():
 
         n = cp.cuda.runtime.getDeviceCount()
         if n > 0:
-            dev = cp.cuda.Device(0)
-            return f"GPU: {dev.attributes['DeviceName']} (detected)"
+            name = cp.cuda.runtime.getDeviceProperties(0)['name']
+            if isinstance(name, bytes):
+                name = name.decode()
+            return f"GPU: {name} (detected)"
     except Exception:
         pass
     return "GPU: not available (using CPU)"
