@@ -11,10 +11,10 @@ dependencies = [
     "scipy",
     "psfmodels",
     "psutil",
+    "cupy-cuda12x",
 ]
 
 [project.optional-dependencies]
-gpu = ["cupy-cuda12x"]
 gui = ["pyqt5"]
 dev = ["pytest"]
 

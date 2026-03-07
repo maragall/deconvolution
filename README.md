@@ -19,11 +19,7 @@ conda activate petakit
 python -c "from petakit import deconvolve; print('OK')"
 ```
 
-### GPU (optional)
-
-```bash
-pip install cupy-cuda12x
-```
+GPU (CuPy) is installed by default. The engine auto-detects CUDA GPUs and falls back to CPU if none are available.
 
 ## Usage
 
