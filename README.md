@@ -16,10 +16,10 @@ conda activate petakit
 ### Verify
 
 ```bash
-python -c "from petakit import deconvolve; print('OK')"
+petakit --check
 ```
 
-GPU (CuPy) is installed by default. The engine auto-detects CUDA GPUs and falls back to CPU if none are available.
+This prints GPU status and dependency versions. The engine auto-detects CUDA GPUs and falls back to CPU if none are available.
 
 ## Usage
 

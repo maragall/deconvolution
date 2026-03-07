@@ -89,6 +89,22 @@ def run_batch(acq_path, channel, output_dir=None, method="omw",
     print(f"\nComplete! Results saved to: {output_dir}")
 
 
+def _run_check():
+    """Print install health and GPU status, then exit."""
+    import numpy, scipy, tifffile
+    print(f"petakit  : installed")
+    print(f"numpy    : {numpy.__version__}")
+    print(f"scipy    : {scipy.__version__}")
+    print(f"tifffile : {tifffile.__version__}")
+    try:
+        import cupy
+        print(f"cupy     : {cupy.__version__}")
+    except Exception:
+        print("cupy     : not installed")
+    print(gpu_info())
+    print("\nReady to deconvolve.")
+
+
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -108,13 +124,19 @@ Examples:
     )
 
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Print install health and GPU status, then exit",
+    )
+    parser.add_argument(
         "acquisition",
+        nargs="?",
         type=Path,
         help="Path to acquisition folder",
     )
     parser.add_argument(
         "--channel", "-c",
-        required=True,
+        default=None,
         help="Channel to process (e.g., 488)",
     )
     parser.add_argument(
@@ -146,6 +168,15 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    if args.check:
+        _run_check()
+        return
+
+    if args.acquisition is None:
+        parser.error("the following arguments are required: acquisition")
+    if args.channel is None:
+        parser.error("the following arguments are required: --channel/-c")
 
     try:
         run_batch(
