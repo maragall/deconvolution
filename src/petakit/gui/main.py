@@ -1,4 +1,4 @@
-"""Deconwolf GUI - Simple PyQt interface for microscopy deconvolution."""
+"""PetaKit GUI - Simple PyQt interface for microscopy deconvolution."""
 import sys
 from pathlib import Path
 
@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from ..readers import open_acquisition
-from ..psf import compute_psf_size, generate_psf, wavelength_from_channel
+from ..psf import compute_psf_size, generate_psf, wavelength_from_channel, infer_immersion_index
 from ..core import deconvolve
 from ..engine import gpu_info
 
@@ -35,12 +35,7 @@ class DeconvolutionWorker(QThread):
             meta = self.acq.metadata
             wavelength = wavelength_from_channel(f"Fluorescence {self.channel} nm Ex")
 
-            if meta.na <= 1.0:
-                ni = 1.0
-            elif meta.na <= 1.33:
-                ni = 1.33
-            else:
-                ni = 1.515
+            ni = infer_immersion_index(meta.na)
 
             nz_psf, nxy_psf = compute_psf_size(
                 meta.nz, meta.dxy, meta.dz, wavelength, meta.na, ni,
@@ -75,7 +70,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Deconwolf")
+        self.setWindowTitle("PetaKit")
         self.setMinimumWidth(500)
 
         self.acq = None

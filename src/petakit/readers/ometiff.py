@@ -95,34 +95,29 @@ class OMETiffReader(AcquisitionReader):
         if not filepath.exists():
             raise FileNotFoundError(f"OME-TIFF not found: {filepath}")
 
-        # Read the file
         with tifffile.TiffFile(filepath) as tif:
-            # Get channel index
             channel_idx = self._get_channel_index(tif.ome_metadata, channel)
 
-            # Read data - typically shaped as (Z, C, Y, X) or (C, Z, Y, X)
-            data = tif.asarray()
+            # Use series[0].asarray() which respects OME dimension ordering
+            # (handles Z-first-then-C Cephla layout and any other ordering)
+            series = tif.series[0]
+            data = series.asarray()
+            axes = series.axes.upper()
 
-            # Handle different dimension orders
-            # OME-TIFF from this system appears to be (Z*C, Y, X) interleaved
-            # or could be (C, Z, Y, X)
-            if data.ndim == 3:
-                # Likely interleaved: reshape to (C, Z, Y, X) then extract channel
-                n_channels = len(self.metadata.channels)
-                n_z = data.shape[0] // n_channels
-                data = data.reshape(n_z, n_channels, data.shape[1], data.shape[2])
-                # Now (Z, C, Y, X)
-                stack = data[:, channel_idx, :, :]
-            elif data.ndim == 4:
-                # Already separated, determine order from shape
-                # Assume (Z, C, Y, X) if second dim matches channel count
-                if data.shape[1] == len(self.metadata.channels):
-                    stack = data[:, channel_idx, :, :]
-                else:
-                    # Try (C, Z, Y, X)
-                    stack = data[channel_idx, :, :, :]
+            # Squeeze singleton T dimension if present
+            if 'T' in axes:
+                t_pos = axes.index('T')
+                if data.shape[t_pos] == 1:
+                    data = np.squeeze(data, axis=t_pos)
+                    axes = axes.replace('T', '')
+
+            # Extract channel
+            if 'C' in axes:
+                c_pos = axes.index('C')
+                stack = np.take(data, channel_idx, axis=c_pos)
             else:
-                raise ValueError(f"Unexpected data shape: {data.shape}")
+                # Single-channel file
+                stack = data
 
         return stack.astype(np.float32)
 

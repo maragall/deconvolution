@@ -1,50 +1,36 @@
-# Deconwolf Python Wrapper
+# PetaKit
 
-A Python wrapper and GUI for [**deconwolf**](https://github.com/elgw/deconwolf)
+Microscopy deconvolution with PetaKit5D algorithms (Richardson-Lucy, OTF-Masked Wiener).
+GPU-first via CuPy, CPU fallback via NumPy/SciPy.
 
 ## Installation
-
-### Linux
 
 ```bash
 git clone git@github.com:maragall/deconvolution.git
 cd deconvolution
 
-# Install system libraries (FFTW3 and libpng are not bundled)
-sudo apt-get install -y libfftw3-single3 libpng16-16
-
-# Create Python environment
 conda env create -f environment.yml
-conda activate deconwolf
+conda activate petakit
 ```
-
-### Windows
-
-```powershell
-git clone git@github.com:maragall/deconvolution.git
-cd deconvolution
-
-# Create Python environment
-conda env create -f environment.yml
-conda activate deconwolf
-```
-
-All required DLLs are bundled in `bin\windows-x86_64\`.
 
 ### Verify
 
 ```bash
-python -c "from deconwolf.binary import find_binary; print(find_binary())"
+python -c "from petakit import deconvolve; print('OK')"
 ```
 
-This should print the path to the bundled `dw` binary.
+### GPU (optional)
+
+```bash
+pip install cupy-cuda12x
+```
 
 ## Usage
 
 ### GUI
 
 ```bash
-deconwolf-gui
+petakit-gui
 ```
 
 1. Browse to your acquisition folder
@@ -54,21 +40,23 @@ deconwolf-gui
 ### Command Line
 
 ```bash
-# Process all FOVs for channel 488
-deconwolf /path/to/acquisition --channel 488
+# OMW deconvolution (recommended, 2 iterations)
+petakit /path/to/acquisition --channel 488
 
-# With custom parameters
-deconwolf /path/to/acquisition --channel 488 --relerror 0.02 --maxiter 100
+# RL deconvolution (max resolution, 15 iterations)
+petakit /path/to/acquisition --channel 488 --method rl
 
-# GPU acceleration (requires OpenCL)
-deconwolf /path/to/acquisition --channel 488 --method shbcl2
+# Force CPU (no GPU)
+petakit /path/to/acquisition --channel 488 --no-gpu
+
+# Verbose output
+petakit /path/to/acquisition --channel 488 -v
 ```
 
 ### Python API
 
 ```python
-from deconwolf import deconvolve, generate_psf, open_acquisition
-from deconwolf.psf import compute_psf_size
+from petakit import deconvolve, generate_psf, compute_psf_size, open_acquisition
 
 # Open acquisition
 acq = open_acquisition("/path/to/data")
@@ -98,21 +86,19 @@ for fov in acq.iter_fovs():
 - **OME-TIFF**: `ome_tiff/*.ome.tiff`
 - **Individual TIFF**: `*_Fluorescence_*_nm_Ex.tiff`
 
-## Deconvolution Parameters
+## Deconvolution Methods
 
-All parameters are passed directly to deconwolf. See the [deconwolf documentation](https://elgw.github.io/deconwolf/) for details.
+| Method | Iterations | Use case |
+|--------|-----------|----------|
+| `omw` (default) | 2 | High throughput, fast convergence |
+| `rl` | 15 | Maximum resolution, more iterations |
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| relerror | 0.02 | Convergence threshold (adaptive stopping) |
-| maxiter | 200 | Maximum iterations |
-| method | shb | Algorithm: `shb` (CPU), `rl` (Richardson-Lucy), `shbcl2` (GPU/OpenCL) |
+GPU is auto-detected via CuPy. Use `--no-gpu` to force CPU.
 
 ## Credits
 
-- **Deconwolf**: Erik Wernersson and contributors - https://github.com/elgw/deconwolf
-- **Citation**: Wernersson et al., "Deconwolf—a GPU-accelerated deconvolution tool for microscopy", Nature Methods 2024
+- **PetaKit5D**: Ruan et al., Nature Methods 2024
 
 ## License
 
-This wrapper is MIT licensed. The deconwolf binary has its own license (GPL v3) - see the [deconwolf repository](https://github.com/elgw/deconwolf).
+MIT

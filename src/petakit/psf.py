@@ -10,6 +10,23 @@ except ImportError:
     HAS_PSFMODELS = False
 
 
+def infer_immersion_index(na: float) -> float:
+    """Infer immersion medium refractive index from numerical aperture.
+
+    Args:
+        na: Numerical aperture of the objective.
+
+    Returns:
+        Refractive index: 1.0 (air), 1.33 (water), or 1.515 (oil).
+    """
+    if na <= 1.0:
+        return 1.0
+    elif na <= 1.33:
+        return 1.33
+    else:
+        return 1.515
+
+
 def compute_psf_size(nz_acquisition, dxy, dz, wavelength, na, ni=1.0):
     """Compute PSF dimensions from optical parameters.
 
