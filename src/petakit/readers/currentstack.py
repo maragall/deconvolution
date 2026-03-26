@@ -117,17 +117,3 @@ class CurrentStackReader(AcquisitionReader):
 
         stack = np.stack([slices[z] for z in sorted(slices)], axis=0)
         return stack.astype(np.float32)
-
-    def get_plane(self, fov: FOV, channel: str, z: int) -> np.ndarray:
-        """Load a single z-plane efficiently (reads one page)."""
-        path = self._plane_dir / f"{fov.region}_{fov.index}_stack.tiff"
-        if not path.exists():
-            raise FileNotFoundError(f"Stack file not found: {path}")
-
-        with tifffile.TiffFile(str(path)) as tif:
-            for page in tif.pages:
-                meta = json.loads(page.description)
-                if channel in meta["channel"] and meta["z_level"] == z:
-                    return page.asarray().astype(np.float32)
-
-        raise FileNotFoundError(f"Plane z={z}, channel '{channel}' not found in {path.name}")

@@ -131,10 +131,6 @@ class AcquisitionReader(ABC):
         """
         pass
 
-    def get_plane(self, fov: FOV, channel: str, z: int) -> np.ndarray:
-        """Load a single z-plane. Override for efficient single-plane reads."""
-        return self.get_stack(fov, channel)[z]
-
     def get_all_channels(self, fov: FOV) -> dict[str, np.ndarray]:
         """Load all channels for a FOV."""
         return {ch: self.get_stack(fov, ch) for ch in self.metadata.channels}

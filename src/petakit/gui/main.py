@@ -106,11 +106,6 @@ class ComparisonWindow(QWidget):
         self._left.load_dataset(raw_path)
         self._right.load_dataset(deconv_path)
 
-        # Default to 3D view for z-stacks
-        for viewer in (self._left, self._right):
-            if viewer.ndv_viewer:
-                viewer.ndv_viewer.display_model.visible_axes = (-3, -2, -1)
-
         # Hide right viewer's LightweightViewer sliders — left drives both
         self._right._fov_slider_container.setVisible(False)
         self._right._time_container.setVisible(False)
@@ -119,10 +114,10 @@ class ComparisonWindow(QWidget):
         self._left._fov_slider.valueChanged.connect(self._sync_fov)
 
         # Track last-seen state for change detection
+        self._last_z = None
         self._last_clims = {}
-        self._last_visible_axes = None
 
-        # Start polling for Z + contrast + 3D mode sync
+        # Start polling for Z + contrast sync
         self._sync_timer = QTimer(self)
         self._sync_timer.timeout.connect(self._poll_sync)
         self._sync_timer.start(self._POLL_MS)
@@ -166,15 +161,6 @@ class ComparisonWindow(QWidget):
                 if key != self._last_clims.get(ch_idx):
                     self._last_clims[ch_idx] = key
                     right_luts[ch_idx].clims = left_clims
-        except Exception:
-            pass
-
-        # ── 3D mode sync (visible_axes) ───────────────────────────────
-        try:
-            left_va = left_ndv.display_model.visible_axes
-            if left_va != self._last_visible_axes:
-                self._last_visible_axes = left_va
-                right_ndv.display_model.visible_axes = left_va
         except Exception:
             pass
 
@@ -261,9 +247,12 @@ class PreviewWorker(QThread):
             fovs = list(self.acq.iter_fovs())
             mid_z = self.acq.metadata.nz // 2
 
-            # Score a subsample of FOVs to keep it fast
+            # Score a small random subsample — read only the middle
+            # z-plane via tifffile to avoid loading full stacks.
             import random
-            max_to_score = min(len(fovs), 30)
+            import tifffile as tf
+            import json
+            max_to_score = min(len(fovs), 15)
             if len(fovs) > max_to_score:
                 candidates = random.sample(fovs, max_to_score)
             else:
@@ -272,8 +261,11 @@ class PreviewWorker(QThread):
             self.progress.emit(f"Scoring {len(candidates)} FOVs...")
             scores = []
             for fov in candidates:
-                plane = self.acq.get_plane(fov, self.channel, mid_z)
-                score = float(np.mean(plane) * np.std(plane))
+                try:
+                    plane = self._read_mid_plane(fov, mid_z)
+                    score = float(np.mean(plane) * np.std(plane))
+                except Exception:
+                    score = 0.0
                 scores.append((score, fov))
 
             scores.sort(key=lambda x: x[0], reverse=True)
@@ -305,6 +297,39 @@ class PreviewWorker(QThread):
 
         except Exception as e:
             self.error.emit(str(e))
+
+    def _read_mid_plane(self, fov, mid_z):
+        """Read only the middle z-plane for scoring — avoids full stack load."""
+        import json
+        import tifffile as tf
+
+        acq = self.acq
+        fmt = acq.format_name
+
+        if fmt == "currentstack":
+            # Multi-page TIFF: scan pages for matching z_level + channel
+            path = acq._plane_dir / f"{fov.region}_{fov.index}_stack.tiff"
+            with tf.TiffFile(str(path)) as tif:
+                for page in tif.pages:
+                    meta = json.loads(page.description)
+                    if (self.channel in meta["channel"]
+                            and meta["z_level"] == mid_z):
+                        return page.asarray().astype(float)
+
+        elif fmt == "individual":
+            # One file per z-plane — read just the middle one
+            import re
+            pattern = (f"{fov.region}_{fov.index}_{mid_z}"
+                       f"_Fluorescence_{self.channel}_nm_Ex.tiff")
+            for subdir in acq.root.iterdir():
+                if subdir.is_dir():
+                    candidate = subdir / pattern
+                    if candidate.exists():
+                        return tf.imread(str(candidate)).astype(float)
+
+        # Fallback: load full stack (ometiff or unknown format)
+        stack = acq.get_stack(fov, self.channel)
+        return stack[mid_z]
 
 
 class RawExportWorker(QThread):
