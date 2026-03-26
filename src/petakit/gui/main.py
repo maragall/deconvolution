@@ -72,7 +72,8 @@ class ComparisonWindow(QWidget):
 
     _POLL_MS = 80
 
-    def __init__(self, raw_path, deconv_path, channel_name):
+    def __init__(self, raw_path, deconv_path, channel_name,
+                 method="", iterations=0):
         super().__init__()
         from ndviewer_light import LightweightViewer
         from PyQt5.QtCore import QTimer
@@ -90,9 +91,12 @@ class ComparisonWindow(QWidget):
         left_col.addWidget(self._left, 1)
         viewers_layout.addLayout(left_col, 1)
 
-        # Right: Deconvolved
+        # Right: Deconvolved (with algorithm info)
         right_col = QVBoxLayout()
-        right_col.addWidget(QLabel("Deconvolved"))
+        deconv_label = "Deconvolved"
+        if method:
+            deconv_label += f": {method.upper()}, {iterations} iterations"
+        right_col.addWidget(QLabel(deconv_label))
         self._right = LightweightViewer()
         right_col.addWidget(self._right, 1)
         viewers_layout.addLayout(right_col, 1)
@@ -252,7 +256,7 @@ class PreviewWorker(QThread):
             import random
             import tifffile as tf
             import json
-            max_to_score = min(len(fovs), 15)
+            max_to_score = min(len(fovs), 100)
             if len(fovs) > max_to_score:
                 candidates = random.sample(fovs, max_to_score)
             else:
@@ -635,8 +639,10 @@ class MainWindow(QMainWindow):
     def _on_preview_finished(self, raw_dir, deconv_dir):
         self._set_running(False)
         self.status_label.setText("Preview ready")
+        params = self._get_params()
         self._preview_window = ComparisonWindow(
             raw_dir, deconv_dir, self._last_channel,
+            method=params["method"], iterations=params["iterations"],
         )
 
     # ── View output (comparison) ──────────────────────────────────────
@@ -675,8 +681,10 @@ class MainWindow(QMainWindow):
     def _open_comparison(self, raw_dir, deconv_dir):
         self.view_btn.setEnabled(True)
         self.status_label.setText("")
+        params = self._get_params()
         self._comparison_window = ComparisonWindow(
             raw_dir, deconv_dir, self._last_channel,
+            method=params["method"], iterations=params["iterations"],
         )
 
     # ── Error handling ────────────────────────────────────────────────
