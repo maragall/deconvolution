@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QFileDialog, QLabel, QComboBox, QProgressBar,
     QGroupBox, QSpinBox, QTextEdit, QCheckBox,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 
 from ..readers import open_acquisition
 from ..psf import compute_psf_size, generate_psf, wavelength_from_channel, infer_immersion_index
@@ -63,11 +63,19 @@ def _fmt_time(seconds):
 # ── Comparison Window ─────────────────────────────────────────────────────
 
 class ComparisonWindow(QWidget):
-    """Side-by-side raw vs deconvolved viewer using two LightweightViewer."""
+    """Side-by-side raw vs deconvolved viewer using two LightweightViewer.
+
+    Left viewer (raw) is the "leader" — its FOV slider, Z position, and
+    contrast are mirrored to the right viewer (deconvolved) via polling,
+    following the pattern from Cephla-Lab/ndviewer.
+    """
+
+    _POLL_MS = 80
 
     def __init__(self, raw_path, deconv_path, channel_name):
         super().__init__()
         from ndviewer_light import LightweightViewer
+        from PyQt5.QtCore import QTimer
 
         self.setWindowTitle(f"PetaKit — Fluorescence {channel_name} nm Ex")
         self.resize(1400, 700)
@@ -98,14 +106,67 @@ class ComparisonWindow(QWidget):
         self._left.load_dataset(raw_path)
         self._right.load_dataset(deconv_path)
 
-        # Hide right viewer's navigation sliders — left drives both
+        # Hide right viewer's LightweightViewer sliders — left drives both
         self._right._fov_slider_container.setVisible(False)
         self._right._time_container.setVisible(False)
 
         # Sync: left FOV slider → right viewer
-        self._left._fov_slider.valueChanged.connect(
-            lambda v: self._right.load_fov(v)
-        )
+        self._left._fov_slider.valueChanged.connect(self._sync_fov)
+
+        # Track last-seen state for change detection
+        self._last_z = None
+        self._last_clims = {}
+
+        # Start polling for Z + contrast sync
+        self._sync_timer = QTimer(self)
+        self._sync_timer.timeout.connect(self._poll_sync)
+        self._sync_timer.start(self._POLL_MS)
+
+    def _sync_fov(self, value):
+        """When left FOV changes, load same FOV on right and re-hide sliders."""
+        self._right.load_fov(value)
+        # ndv_viewer may be recreated after load_fov — re-hide its sliders
+        if self._right.ndv_viewer:
+            try:
+                self._right.ndv_viewer.widget().dims_sliders.hide()
+            except Exception:
+                pass
+
+    def _poll_sync(self):
+        """Mirror left viewer's Z position and contrast to right viewer."""
+        left_ndv = getattr(self._left, "ndv_viewer", None)
+        right_ndv = getattr(self._right, "ndv_viewer", None)
+        if not left_ndv or not right_ndv:
+            return
+
+        # ── Position sync (all shared dimensions) ─────────────────────
+        try:
+            left_idx = dict(left_ndv.display_model.current_index)
+            right_idx = right_ndv.display_model.current_index
+            for key, val in left_idx.items():
+                if key in right_idx and right_idx[key] != val:
+                    right_idx[key] = val
+        except Exception:
+            pass
+
+        # ── Contrast / CLIMs sync ─────────────────────────────────────
+        try:
+            left_luts = left_ndv.display_model.luts
+            right_luts = right_ndv.display_model.luts
+            for ch_idx in left_luts:
+                if ch_idx not in right_luts:
+                    continue
+                left_clims = left_luts[ch_idx].clims
+                key = repr(left_clims)
+                if key != self._last_clims.get(ch_idx):
+                    self._last_clims[ch_idx] = key
+                    right_luts[ch_idx].clims = left_clims
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        self._sync_timer.stop()
+        super().closeEvent(event)
 
 
 # ── Workers ───────────────────────────────────────────────────────────────
@@ -320,6 +381,12 @@ class MainWindow(QMainWindow):
         self.info_label = QLabel("")
         acq_layout.addWidget(self.info_label)
 
+        # Preview button (right under drop zone)
+        self.preview_btn = QPushButton("Preview (5 FOVs)")
+        self.preview_btn.setEnabled(False)
+        self.preview_btn.clicked.connect(self._run_preview)
+        acq_layout.addWidget(self.preview_btn)
+
         layout.addWidget(acq_group)
 
         # Channel selection
@@ -368,12 +435,6 @@ class MainWindow(QMainWindow):
         params_layout.addWidget(self.nogpu_check)
 
         layout.addWidget(params_group)
-
-        # Preview button
-        self.preview_btn = QPushButton("Preview (5 FOVs)")
-        self.preview_btn.setEnabled(False)
-        self.preview_btn.clicked.connect(self._run_preview)
-        layout.addWidget(self.preview_btn)
 
         # Run button
         self.run_btn = QPushButton("Run Deconvolution")
