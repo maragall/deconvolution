@@ -2,6 +2,7 @@
 import argparse
 from pathlib import Path
 
+import numpy as np
 import tifffile
 
 from .readers import open_acquisition
@@ -45,7 +46,8 @@ def run_batch(acq_path, channel, output_dir=None, method="omw",
         )
 
     output_dir = Path(output_dir) if output_dir else (acq_path / "deconvolved")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    ome_dir = output_dir / "ome_tiff"
+    ome_dir.mkdir(parents=True, exist_ok=True)
     print(f"  Output: {output_dir}")
 
     wavelength = wavelength_from_channel(f"Fluorescence {channel} nm Ex")
@@ -82,8 +84,19 @@ def run_batch(acq_path, channel, output_dir=None, method="omw",
             verbose=verbose,
         )
 
-        out_path = output_dir / f"{fov}_ch{channel}_deconv.tiff"
-        tifffile.imwrite(out_path, result, imagej=True)
+        out_path = ome_dir / f"{fov}.ome.tiff"
+        channel_name = f"Fluorescence {channel} nm Ex"
+        p_low, p_high = np.percentile(result, (0.1, 99.9))
+        if p_high > p_low:
+            clipped = np.clip(result, p_low, p_high)
+            result_u16 = ((clipped - p_low) / (p_high - p_low) * 65535).astype(np.uint16)
+        else:
+            result_u16 = np.zeros_like(result, dtype=np.uint16)
+        tifffile.imwrite(
+            out_path, result_u16,
+            ome=True,
+            metadata={"axes": "ZYX", "Channel": {"Name": channel_name}},
+        )
         print("done")
 
     print(f"\nComplete! Results saved to: {output_dir}")

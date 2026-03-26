@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [
-    "numpy",
+    "numpy>=2.0",
     "tifffile",
     "scipy",
     "psfmodels",
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["pyqt5"]
+gui = ["pyqt5", "ndviewer-light @ git+https://github.com/Cephla-Lab/ndviewer_light.git"]
 dev = ["pytest"]
 
 [project.scripts]
@@ -25,6 +25,9 @@ petakit-gui = "petakit.gui.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/petakit"]

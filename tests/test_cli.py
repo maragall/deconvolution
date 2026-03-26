@@ -16,7 +16,7 @@ class TestRunBatch:
             use_gpu=False,
         )
 
-        outputs = list(output_dir.glob("*.tiff"))
+        outputs = list((output_dir / "ome_tiff").glob("*.ome.tiff"))
         assert len(outputs) == 1
 
     def test_invalid_channel_raises(self, individual_acquisition):
@@ -38,4 +38,4 @@ class TestRunBatch:
         )
 
         assert output_dir.exists()
-        assert len(list(output_dir.glob("*.tiff"))) == 1
+        assert len(list((output_dir / "ome_tiff").glob("*.ome.tiff"))) == 1

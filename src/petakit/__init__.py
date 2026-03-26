@@ -23,16 +23,25 @@ Example:
     ...     result = deconvolve(stack, psf)
 """
 from .core import deconvolve
-from .psf import compute_psf_size, generate_psf
+from .engine import gpu_info
+from .psf import (
+    compute_psf_size,
+    generate_psf,
+    infer_immersion_index,
+    wavelength_from_channel,
+)
 from .readers import open_acquisition, Metadata, FOV, AcquisitionReader
 
 __all__ = [
+    "AcquisitionReader",
+    "FOV",
+    "Metadata",
     "compute_psf_size",
     "deconvolve",
     "generate_psf",
+    "gpu_info",
+    "infer_immersion_index",
     "open_acquisition",
-    "Metadata",
-    "FOV",
-    "AcquisitionReader",
+    "wavelength_from_channel",
 ]
 __version__ = "0.0.0"

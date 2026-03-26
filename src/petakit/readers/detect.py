@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from .base import AcquisitionReader
+from .currentstack import detect_currentstack, open_currentstack
 from .individual import detect_individual, open_individual
 from .ometiff import detect_ometiff, open_ometiff
 
@@ -19,6 +20,8 @@ def detect_format(root: Path) -> str | None:
         return "ometiff"
     if detect_individual(root):
         return "individual"
+    if detect_currentstack(root):
+        return "currentstack"
     return None
 
 
@@ -60,10 +63,13 @@ def open_acquisition(path: str | Path) -> AcquisitionReader:
         return open_ometiff(root)
     elif fmt == "individual":
         return open_individual(root)
+    elif fmt == "currentstack":
+        return open_currentstack(root)
     else:
         raise ValueError(
             f"Unknown acquisition format at {root}.\n"
             f"Expected one of:\n"
             f"  - ome_tiff/*.ome.tiff (OME-TIFF format)\n"
-            f"  - */*_Fluorescence_*_nm_Ex.tiff (Individual format)"
+            f"  - */*_Fluorescence_*_nm_Ex.tiff (Individual format)\n"
+            f"  - */current_*_stack.tiff (Legacy stack format)"
         )
