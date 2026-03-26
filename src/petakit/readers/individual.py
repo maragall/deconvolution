@@ -114,3 +114,13 @@ class IndividualReader(AcquisitionReader):
         # Stack images
         slices = [tifffile.imread(f) for _, f in files_with_z]
         return np.stack(slices, axis=0).astype(np.float32)
+
+    def get_plane(self, fov: FOV, channel: str, z: int) -> np.ndarray:
+        """Load a single z-plane efficiently (reads one file)."""
+        pattern = f"{fov.region}_{fov.index}_{z}_Fluorescence_{channel}_nm_Ex.tiff"
+        for subdir in self.root.iterdir():
+            if subdir.is_dir():
+                path = subdir / pattern
+                if path.exists():
+                    return tifffile.imread(path).astype(np.float32)
+        raise FileNotFoundError(f"Plane z={z} not found for FOV {fov}, channel {channel}")

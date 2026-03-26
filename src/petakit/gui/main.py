@@ -114,10 +114,10 @@ class ComparisonWindow(QWidget):
         self._left._fov_slider.valueChanged.connect(self._sync_fov)
 
         # Track last-seen state for change detection
-        self._last_z = None
         self._last_clims = {}
+        self._last_visible_axes = None
 
-        # Start polling for Z + contrast sync
+        # Start polling for Z + contrast + 3D mode sync
         self._sync_timer = QTimer(self)
         self._sync_timer.timeout.connect(self._poll_sync)
         self._sync_timer.start(self._POLL_MS)
@@ -161,6 +161,15 @@ class ComparisonWindow(QWidget):
                 if key != self._last_clims.get(ch_idx):
                     self._last_clims[ch_idx] = key
                     right_luts[ch_idx].clims = left_clims
+        except Exception:
+            pass
+
+        # ── 3D mode sync (visible_axes) ───────────────────────────────
+        try:
+            left_va = left_ndv.display_model.visible_axes
+            if left_va != self._last_visible_axes:
+                self._last_visible_axes = left_va
+                right_ndv.display_model.visible_axes = left_va
         except Exception:
             pass
 
@@ -258,8 +267,7 @@ class PreviewWorker(QThread):
             self.progress.emit(f"Scoring {len(candidates)} FOVs...")
             scores = []
             for fov in candidates:
-                stack = self.acq.get_stack(fov, self.channel)
-                plane = stack[mid_z]
+                plane = self.acq.get_plane(fov, self.channel, mid_z)
                 score = float(np.mean(plane) * np.std(plane))
                 scores.append((score, fov))
 
