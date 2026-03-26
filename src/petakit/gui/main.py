@@ -106,6 +106,11 @@ class ComparisonWindow(QWidget):
         self._left.load_dataset(raw_path)
         self._right.load_dataset(deconv_path)
 
+        # Default to 3D view for z-stacks
+        for viewer in (self._left, self._right):
+            if viewer.ndv_viewer:
+                viewer.ndv_viewer.display_model.visible_axes = (-3, -2, -1)
+
         # Hide right viewer's LightweightViewer sliders — left drives both
         self._right._fov_slider_container.setVisible(False)
         self._right._time_container.setVisible(False)
