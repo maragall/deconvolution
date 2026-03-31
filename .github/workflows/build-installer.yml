@@ -1,0 +1,55 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-deps .
+          pip install numpy tifffile scipy psfmodels psutil cupy-cuda12x
+          pip install pyqt5 "ndviewer-light @ git+https://github.com/Cephla-Lab/ndviewer_light.git"
+          pip install pyinstaller PyOpenGL pyconify zarr Pillow colorspacious viscm numba ml-dtypes
+
+      - name: Build with PyInstaller
+        working-directory: installer
+        run: python -m PyInstaller petakit_windows.spec --noconfirm --distpath ../dist --workpath ../build --clean
+
+      - name: Post-build smoke test
+        continue-on-error: true
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          dist\petakit-gui\petakit-gui.exe --smoke-test
+
+      - name: Stage artifact
+        run: |
+          mkdir artifact
+          xcopy dist\petakit-gui artifact\petakit-gui\ /E /I /Q
+          copy README.md artifact\
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: petakit-windows
+          path: artifact/

@@ -7,14 +7,68 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLabel, QComboBox, QProgressBar,
-    QGroupBox, QSpinBox, QTextEdit, QCheckBox,
+    QGroupBox, QSpinBox, QTextEdit, QCheckBox, QStyleFactory,
 )
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QIcon, QPalette, QPixmap, QPainter
 
 from ..readers import open_acquisition
 from ..psf import compute_psf_size, generate_psf, wavelength_from_channel, infer_immersion_index
 from ..core import deconvolve
 from ..engine import gpu_info
+
+
+_LOGO_SVG = str(Path(__file__).parent / "cephla_logo.svg")
+
+STYLE_SHEET = """
+QGroupBox {
+    font-weight: bold;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+QPushButton {
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #e8e8e8;
+}
+QPushButton:disabled {
+    border-color: #c7c7cc;
+    color: #c7c7cc;
+}
+QProgressBar {
+    border: none;
+    border-radius: 4px;
+    height: 6px;
+}
+QProgressBar::chunk {
+    background-color: #0071e3;
+    border-radius: 4px;
+}
+"""
+
+
+def _make_cephla_icon():
+    """Render the SVG logo to a 64x64 QIcon."""
+    try:
+        from PyQt5.QtSvg import QSvgRenderer
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(Qt.transparent)
+        renderer = QSvgRenderer(_LOGO_SVG)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pixmap)
+    except Exception:
+        return None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -252,7 +306,7 @@ class PreviewWorker(QThread):
             mid_z = self.acq.metadata.nz // 2
 
             # Score a small random subsample — read only the middle
-            # z-plane via tifffile to avoid loading full stacks.
+            # z-plane via tifffile, then subsample pixels for fast stats.
             import random
             import tifffile as tf
             import json
@@ -267,7 +321,9 @@ class PreviewWorker(QThread):
             for fov in candidates:
                 try:
                     plane = self._read_mid_plane(fov, mid_z)
-                    score = float(np.mean(plane) * np.std(plane))
+                    # Subsample every 8th pixel for fast scoring
+                    sparse = plane[::8, ::8].ravel()
+                    score = float(np.mean(sparse) * np.std(sparse))
                 except Exception:
                     score = 0.0
                 scores.append((score, fov))
@@ -382,8 +438,15 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PetaKit")
-        self.setMinimumWidth(500)
+        self.setWindowTitle("Cephla PetaKit")
+        self.setMinimumWidth(580)
+        self.setMinimumHeight(650)
+
+        self.setStyleSheet(STYLE_SHEET)
+
+        icon = _make_cephla_icon()
+        if icon:
+            self.setWindowIcon(icon)
 
         self.acq = None
         self.worker = None
@@ -395,10 +458,13 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
 
         # GPU status
         self.gpu_label = QLabel(gpu_info())
         self.gpu_label.setStyleSheet("color: #666; font-style: italic;")
+        self.gpu_label.setToolTip("Detected GPU acceleration status")
         layout.addWidget(self.gpu_label)
 
         # Acquisition selection (drop zone + browse)
@@ -407,13 +473,14 @@ class MainWindow(QMainWindow):
 
         self.drop_label = QLabel("Drop acquisition folder here\nor click to browse")
         self.drop_label.setAlignment(Qt.AlignCenter)
-        self.drop_label.setFixedHeight(60)
+        self.drop_label.setFixedHeight(70)
         self.drop_label.setStyleSheet(
-            "QLabel { border: 2px dashed #aaa; border-radius: 6px; "
-            "color: #888; background: #fafafa; }"
+            "QLabel { border: 2px dashed #aaa; border-radius: 10px; "
+            "color: #888; background: #fafafa; font-size: 14px; }"
         )
         self.drop_label.setCursor(Qt.PointingHandCursor)
         self.drop_label.setAcceptDrops(True)
+        self.drop_label.setToolTip("Drag and drop an acquisition folder, or click to browse")
         self.drop_label.mousePressEvent = lambda _: self._browse_acquisition()
         self.drop_label.dragEnterEvent = self._drag_enter
         self.drop_label.dragLeaveEvent = self._drag_leave
@@ -421,10 +488,14 @@ class MainWindow(QMainWindow):
         acq_layout.addWidget(self.drop_label)
 
         self.info_label = QLabel("")
+        self.info_label.setToolTip("Acquisition metadata summary")
         acq_layout.addWidget(self.info_label)
 
         # Preview button (right under drop zone)
         self.preview_btn = QPushButton("Preview (5 FOVs)")
+        self.preview_btn.setObjectName("previewButton")
+        self.preview_btn.setCursor(Qt.PointingHandCursor)
+        self.preview_btn.setToolTip("Deconvolve the 5 best FOVs and show raw vs deconvolved side-by-side")
         self.preview_btn.setEnabled(False)
         self.preview_btn.clicked.connect(self._run_preview)
         acq_layout.addWidget(self.preview_btn)
@@ -439,13 +510,16 @@ class MainWindow(QMainWindow):
         channel_row.addWidget(QLabel("Channel:"))
         self.channel_combo = QComboBox()
         self.channel_combo.setEnabled(False)
+        self.channel_combo.setToolTip("Select the fluorescence channel to deconvolve")
         channel_row.addWidget(self.channel_combo, 1)
         channel_layout.addLayout(channel_row)
 
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("Output:"))
         self.output_label = QLabel("(auto)")
+        self.output_label.setToolTip("Directory where deconvolved images will be saved")
         self.output_btn = QPushButton("Change...")
+        self.output_btn.setToolTip("Choose a different output directory")
         self.output_btn.clicked.connect(self._select_output)
         output_row.addWidget(self.output_label, 1)
         output_row.addWidget(self.output_btn)
@@ -461,6 +535,10 @@ class MainWindow(QMainWindow):
         method_row.addWidget(QLabel("Method:"))
         self.method_combo = QComboBox()
         self.method_combo.addItems(["omw (high throughput)", "rl (max resolution)"])
+        self.method_combo.setToolTip(
+            "OMW: fast multi-Wiener filter, good for most cases\n"
+            "RL: Richardson-Lucy iterative, highest resolution but slower"
+        )
         self.method_combo.currentTextChanged.connect(self._on_method_changed)
         method_row.addWidget(self.method_combo)
         params_layout.addLayout(method_row)
@@ -470,16 +548,24 @@ class MainWindow(QMainWindow):
         self.iter_spin = QSpinBox()
         self.iter_spin.setRange(1, 100)
         self.iter_spin.setValue(2)
+        self.iter_spin.setToolTip("Number of deconvolution iterations")
         iter_row.addWidget(self.iter_spin)
+        self.iter_hint = QLabel("recommended: 2")
+        self.iter_hint.setStyleSheet("color: #aaa;")
+        iter_row.addWidget(self.iter_hint)
         params_layout.addLayout(iter_row)
 
         self.nogpu_check = QCheckBox("Force CPU (disable GPU)")
+        self.nogpu_check.setToolTip("Run deconvolution on CPU even if a GPU is available")
         params_layout.addWidget(self.nogpu_check)
 
         layout.addWidget(params_group)
 
         # Run button
         self.run_btn = QPushButton("Run Deconvolution")
+        self.run_btn.setObjectName("runButton")
+        self.run_btn.setCursor(Qt.PointingHandCursor)
+        self.run_btn.setToolTip("Start batch deconvolution of all FOVs")
         self.run_btn.setEnabled(False)
         self.run_btn.clicked.connect(self._run_deconvolution)
         layout.addWidget(self.run_btn)
@@ -494,19 +580,53 @@ class MainWindow(QMainWindow):
 
         # View output button (visible after deconvolution completes)
         self.view_btn = QPushButton("View Output")
+        self.view_btn.setObjectName("viewButton")
+        self.view_btn.setCursor(Qt.PointingHandCursor)
+        self.view_btn.setToolTip("Open raw vs deconvolved side-by-side comparison")
         self.view_btn.setVisible(False)
         self.view_btn.clicked.connect(self._view_output)
         layout.addWidget(self.view_btn)
 
         layout.addStretch()
 
+        # Cephla branding watermark
+        self._add_brand_watermark(layout)
+
     # ── Params ────────────────────────────────────────────────────────
+
+    def _add_brand_watermark(self, layout):
+        """Add subtle Cephla branding at the bottom of the window."""
+        brand_row = QHBoxLayout()
+        brand_row.addStretch()
+        try:
+            from PyQt5.QtSvg import QSvgRenderer
+            logo_label = QLabel()
+            pixmap = QPixmap(14, 14)
+            pixmap.fill(Qt.transparent)
+            renderer = QSvgRenderer(_LOGO_SVG)
+            painter = QPainter(pixmap)
+            painter.setOpacity(80 / 255)
+            renderer.render(painter)
+            painter.end()
+            logo_label.setPixmap(pixmap)
+            brand_row.addWidget(logo_label)
+        except Exception:
+            pass
+        text_label = QLabel("cephla")
+        text_label.setStyleSheet(
+            "color: rgba(49, 196, 243, 80); font-size: 10px; letter-spacing: 3px;"
+        )
+        brand_row.addWidget(text_label)
+        brand_row.addStretch()
+        layout.addLayout(brand_row)
 
     def _on_method_changed(self, method):
         if "omw" in method.lower():
             self.iter_spin.setValue(2)
+            self.iter_hint.setText("recommended: 2")
         else:
             self.iter_spin.setValue(15)
+            self.iter_hint.setText("recommended: 15")
 
     def _get_params(self):
         method = "omw" if "omw" in self.method_combo.currentText().lower() else "rl"
@@ -524,16 +644,16 @@ class MainWindow(QMainWindow):
                 if url.isLocalFile() and Path(url.toLocalFile()).is_dir():
                     event.acceptProposedAction()
                     self.drop_label.setStyleSheet(
-                        "QLabel { border: 2px dashed #4a90d9; border-radius: 6px; "
-                        "color: #4a90d9; background: #e8f0fe; }"
+                        "QLabel { border: 2px dashed #4a90d9; border-radius: 10px; "
+                        "color: #4a90d9; background: #e8f0fe; font-size: 14px; }"
                     )
                     return
         event.ignore()
 
     def _drag_leave(self, event):
         self.drop_label.setStyleSheet(
-            "QLabel { border: 2px dashed #aaa; border-radius: 6px; "
-            "color: #888; background: #fafafa; }"
+            "QLabel { border: 2px dashed #aaa; border-radius: 10px; "
+            "color: #888; background: #fafafa; font-size: 14px; }"
         )
 
     def _drop(self, event):
@@ -558,8 +678,8 @@ class MainWindow(QMainWindow):
             self.acq = open_acquisition(path)
             self.drop_label.setText(Path(path).name)
             self.drop_label.setStyleSheet(
-                "QLabel { border: 2px solid #4a90d9; border-radius: 6px; "
-                "color: #333; background: #e8f0fe; }"
+                "QLabel { border: 2px solid #4a90d9; border-radius: 10px; "
+                "color: #333; background: #e8f0fe; font-size: 14px; }"
             )
 
             meta = self.acq.metadata
@@ -697,6 +817,7 @@ class MainWindow(QMainWindow):
 def main():
     """GUI entry point."""
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PetaKit
+Comment=Microscopy deconvolution tool
+Exec=petakit-gui
+Icon=petakit
+Categories=Science;Education;Graphics;
+Terminal=false
+StartupNotify=true
